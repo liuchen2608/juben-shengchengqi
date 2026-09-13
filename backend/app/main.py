@@ -60,6 +60,9 @@ def create_app(settings=None, db=None, gateway=None):
     from app.agent_api import router as agent_router
 
     app.include_router(agent_router(db, runner, cfg))
+    from app.model_api import router as model_router
+
+    app.include_router(model_router(cfg, db))
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cfg.origins,

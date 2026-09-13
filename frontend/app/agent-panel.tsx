@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, Check, FileText, GitBranch, Layers, Pencil, RotateCcw, X } from "lucide-react";
+import NovelProgress from "./novel-progress";
 import { api, post, requestId } from "./api";
 
 type Node = { id: string; title: string; summary: string; lane: "main" | "auxiliary"; category: string; status: string; include_in_story: boolean; version: number; source_quote: string; next_step: string };
@@ -47,14 +48,14 @@ export default function AgentPanel({ pid, revision, revisionKey, running, onChan
   async function compose() {
     if (!state) return;
     setBusy(true); setError("");
-    try { await api(`/projects/${pid}/stories/compose`, post({ request_id: requestId(), base_revision: revision, agent_revision: state.agent_revision })); setTab("story"); setStoryId(""); await onChanged(); }
+    try { await api(`/projects/${pid}/stories/compose`, post({ request_id: requestId(), base_revision: revision, agent_revision: state.agent_revision, use_summaries: true })); setTab("story"); setStoryId(""); await onChanged(); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   const story = state?.stories.find(s => s.id === storyId) || state?.stories[0];
   const names = Object.fromEntries((state?.nodes || []).map(n => [n.id, n.title]));
 
   return <section className="agent-workbench">
-    <div className="agent-heading"><div><span className="eyebrow">STORY AGENT · 测试版</span><h2>把对话，连成你的故事。</h2><p>持续摘要 → 主辅线分类 → 确认节点 → Skill 连接成文</p></div><button className="primary" disabled={busy || running || !state} onClick={() => void compose()}><GitBranch size={16} /> {running ? "任务进行中" : "连接节点生成故事"}</button></div>
+    <div className="agent-heading"><div><span className="eyebrow">STORY AGENT · 测试版</span><h2>把对话，连成你的故事。</h2><p>问答摘要 → 故事节点 → Skill 构思 → 逐章写作 → 收尾审校</p></div><button className="primary" disabled={busy || running || !state} onClick={() => void compose()}><GitBranch size={16} /> {running ? "任务进行中" : "连接节点生成故事"}</button></div>
     {error && <div className="error-banner" role="alert">{error}<button className="icon-button" aria-label="关闭 Agent 提示" onClick={() => setError("")}><X size={16} /></button></div>}
     <div className="agent-goal"><span>主角方向</span><strong>{state?.current_goal || "正在恢复记忆…"}</strong><small>下一步：{state?.next_step}</small></div>
     <div className="agent-tabs"><button className={tab === "memory" ? "active" : ""} onClick={() => setTab("memory")}><Layers size={15} /> 持续摘要</button><button className={tab === "nodes" ? "active" : ""} onClick={() => setTab("nodes")}><GitBranch size={15} /> 故事节点 <b>{state?.nodes.length || 0}</b></button><button className={tab === "story" ? "active" : ""} onClick={() => setTab("story")}><FileText size={15} /> 完整故事 <b>{state?.stories.length || 0}</b></button></div>
@@ -67,7 +68,7 @@ export default function AgentPanel({ pid, revision, revisionKey, running, onChan
         <div className="node-buttons">{n.status !== "confirmed" && n.status !== "withdrawn" && <button disabled={busy} className="accept" onClick={() => void mutate(n, { status: "confirmed", include_in_story: n.lane === "auxiliary" })}><Check size={13} /> 确认节点</button>}<button className="text-button" onClick={() => setEditing({ ...n })}><Pencil size={12} /> 编辑 / 分类</button><button className="text-button" onClick={() => { void api<Source>(`/projects/${pid}/nodes/${n.id}/source`).then(setSource).catch(e => setError(e.message)); }}>查看原文</button>{n.status === "confirmed" && <button disabled={busy} className="text-button" onClick={() => void mutate(n, { status: "withdrawn" })}>撤回</button>}{n.status === "withdrawn" && <button disabled={busy} className="text-button" onClick={() => void mutate(n, { status: "draft" })}><RotateCcw size={12} /> 恢复待定</button>}</div>
         {n.lane === "auxiliary" && n.status === "confirmed" && <label className="aux-include"><input type="checkbox" checked={n.include_in_story} disabled={busy} onChange={e => void mutate(n, { include_in_story: e.target.checked })} /> 允许影响剧情（以主线为主）</label>}
       </article>)}</div></div>}
-    {tab === "story" && <div className="story-view">{running && <div className="generating" role="status"><span className="pulse-dot" /> 正在通过创作 Skill 连接节点，完成后显示草稿。</div>}{!story && !running && <div className="agent-empty"><FileText size={28} /><h3>故事会从你确认的节点中生长。</h3><p>至少确认一个主角节点和另一个主线节点，再点击“连接节点生成故事”。</p></div>}{story && <>
+    {tab === "story" && <div className="story-view"><NovelProgress pid={pid} running={running} onChanged={onChanged} />{running && <div className="generating" role="status"><span className="pulse-dot" /> 正在通过 Jin Yong Perspective Skill 构思、逐章写作与审校…</div>}{!story && !running && <div className="agent-empty"><FileText size={28} /><h3>故事会从你确认的节点中生长。</h3><p>至少准备一个主角节点和另一个主线节点，再点击“连接节点生成故事”。</p></div>}{story && !running && <>
       <div className="story-toolbar"><select aria-label="故事草稿版本" value={story.id} onChange={e => setStoryId(e.target.value)}>{state?.stories.map((s, i) => <option key={s.id} value={s.id}>草稿 {state.stories.length-i} · {s.title}{s.status === "stale" ? "（过期）" : ""}</option>)}</select><a className="export-button" href={`/api/v1/projects/${pid}/stories/${story.id}/export`} download>导出故事</a></div>
       <div className="story-status">{story.mode === "mock" ? "模拟故事：仅验节点连接，非真实创作效果" : "模型生成草稿：等待你审阅"}{story.status === "stale" && <strong> · 节点或资料已变化，请重新生成</strong>}</div><h2>{story.title}</h2><p className="story-synopsis">{story.synopsis}</p>
       <details className="connection-map" open><summary>节点如何连接 · {story.skill_name}</summary>{story.connections.map((e, i) => <div className="story-edge" key={i}><div><span>{names[e.source_id]}</span><ArrowRight size={14} /><span>{names[e.target_id]}</span></div><p>{({ follows: "承接", causes: "因果", supports: "辅助", payoff: "伏笔回收" } as Record<string, string>)[e.relation]}：{e.reason}</p></div>)}</details>

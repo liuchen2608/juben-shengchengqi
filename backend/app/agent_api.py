@@ -182,13 +182,75 @@ def router(db, runner, cfg):
                 fingerprint=fp,
                 context=context,
                 task_kind="compose",
-                prompt_version="compose_story_v1",
+                prompt_version="novel_pipeline_v1",
                 model="mock" if cfg.model_provider == "mock" else cfg.model_name,
             )
             s.add(run)
             s.flush()
             result = {"message_id": m.id, "run_id": run.id, "status": run.status}
         runner.start(run.id)
+        return result
+
+    @routes.get("/novel-progress")
+    def novel_progress(pid: UUID):
+        with db.transaction() as s:
+            get_project(s, str(pid))
+            run = s.scalar(
+                select(Run)
+                .where(Run.project_id == str(pid), Run.task_kind == "compose")
+                .order_by(Run.created_at.desc())
+                .limit(1)
+            )
+            if not run:
+                return {"run": None}
+            work = run.context.get("novel_work", {})
+            chapters = [
+                {
+                    "title": c["title"],
+                    "content": "\n\n".join(p["content"] for p in c["parts"]),
+                    "finished": c["finished"],
+                }
+                for c in work.get("chapters", [])
+            ]
+            return {
+                "run": {
+                    "id": run.id,
+                    "status": run.status,
+                    "error": run.error,
+                    "stage": work.get("stage", "planning"),
+                    "chapter_index": work.get("chapter_index", 0),
+                    "planned_chapters": len(work.get("plan", {}).get("chapters", [])),
+                    "chapters": chapters,
+                    "characters": sum(len(c["content"]) for c in chapters),
+                    "review": work.get("review"),
+                    "repair_notes": work.get("repair_notes", []),
+                    "can_resume": bool(work) and run.status in ("failed", "cancelled", "interrupted"),
+                }
+            }
+
+    @routes.post("/novels/{rid}/resume", status_code=202, response_model=TurnCreated)
+    async def resume_novel(pid: UUID, rid: UUID):
+        with db.transaction() as s:
+            p = get_project(s, str(pid))
+            run = s.get(Run, str(rid))
+            if not run or run.project_id != p.id or run.task_kind != "compose":
+                raise AppError("NOT_FOUND", "写作任务不存在。", 404)
+            if run.status in ("queued", "running"):
+                return {"message_id": run.message_id, "run_id": run.id, "status": run.status}
+            if run.status not in ("failed", "cancelled", "interrupted") or not run.context.get("novel_work"):
+                raise AppError("RESUME_UNAVAILABLE", "该任务不可续写，请重新生成。", 409)
+            if p.revision != run.input_revision or p.agent_revision != run.context.get("_agent_revision"):
+                raise AppError("CONTEXT_CHANGED", "节点已变化，请重新生成以使用最新资料。", 409)
+            if cfg.model_provider == "mock" or cfg.model_name != run.model:
+                raise AppError("MODEL_CHANGED", "请使用本次写作原有的真实模型继续。", 409)
+            if str(rid) in runner.tasks or s.scalar(
+                select(Run.id).where(Run.status.in_(["queued", "running"])).limit(1)
+            ):
+                raise AppError("RUN_BUSY", "请等待当前任务停止后继续。", 409)
+            run.status = "queued"
+            run.error = None
+            result = {"message_id": run.message_id, "run_id": run.id, "status": run.status}
+        runner.start(str(rid))
         return result
 
     @routes.get("/stories/{sid}/export")

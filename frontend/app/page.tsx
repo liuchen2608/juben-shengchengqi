@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import ModelSettings from "./model-settings";
 import GuidedInterview from "./guided-interview";
 import AgentPanel from "./agent-panel";
 import { ArrowDownToLine, ArrowRight, BookOpen, Check, ChevronRight, Feather, History, Leaf, Menu, MessageCircle, Pencil, Plus, RotateCcw, Send, Sparkles, Square, X } from "lucide-react";
@@ -11,6 +12,7 @@ const active = (status?: string) => status === "queued" || status === "running";
 type Editor = { artifact?: Artifact; title: string; content: string; kind: string; revision: number; requestId: string };
 
 export default function Home() {
+  const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const [agentInitialTab, setAgentInitialTab] = useState("nodes");
   const [agentOpen, setAgentOpen] = useState(false);
   const [questionId, setQuestionId] = useState<string | null>(null);
@@ -172,7 +174,7 @@ export default function Home() {
   const withdrawn = ws?.artifacts.filter(a => !a.active) || [];
   const pending = ws?.proposals.filter(q => q.status === "pending") || [];
 
-  return <div className="app-shell">
+  return <div className="app-shell">{modelSettingsOpen && <ModelSettings onClose={() => setModelSettingsOpen(false)} onConnected={async () => { setHealth(await api<Health>("/health")); }} />}
     <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
       <Link className="brand" href="/" aria-label="留白首页"><span className="brand-mark"><Feather size={23} /></span><span>留白<small>让故事，慢慢发生。</small></span></Link>
       <button className="new-project" onClick={() => setNewOpen(true)}><Plus size={17} /> 开始一个新故事</button>
@@ -186,7 +188,7 @@ export default function Home() {
     {menuOpen && <button className="menu-shade" aria-label="关闭菜单" onClick={() => setMenuOpen(false)} />}
     <main className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="打开项目菜单" onClick={() => setMenuOpen(true)}><Menu size={20} /></button><span>写作工作室</span>{ws && <><ChevronRight size={14} /><strong>{ws.project.title}</strong></>}</div>
-        <div className="top-actions">{pid && <button className="agent-toggle" onClick={() => { setAgentInitialTab("nodes"); setAgentOpen(v => !v); }}>{agentOpen ? "返回对话" : "故事 Agent"}</button>}<span className={`mode-badge ${health?.mode === "real" ? "real" : ""}`}><span className="tiny-dot" />{health ? health.mode === "mock" ? "模拟体验" : "真实模型" : "连接中"}</span>{pid && <a className="export-button" href={`/api/v1/projects/${pid}/export`} download><ArrowDownToLine size={15} /><span>导出资料</span></a>}</div>
+        <div className="top-actions"><button className="agent-toggle" onClick={() => setModelSettingsOpen(true)}>接入模型 API</button>{pid && <button className="agent-toggle" onClick={() => { setAgentInitialTab("nodes"); setAgentOpen(v => !v); }}>{agentOpen ? "返回对话" : "故事 Agent"}</button>}<span className={`mode-badge ${health?.mode === "real" ? "real" : ""}`}><span className="tiny-dot" />{health ? health.mode === "mock" ? "模拟体验" : "真实模型" : "连接中"}</span>{pid && <a className="export-button" href={`/api/v1/projects/${pid}/export`} download><ArrowDownToLine size={15} /><span>导出资料</span></a>}</div>
       </header>
       {health?.mode === "mock" && <div className="mode-notice">当前使用固定示例回复，供体验保存与确认流程。接入模型后，才能验证真实写作引导效果。</div>}
       {error && <div className="error-banner" role="alert"><span>{error}</span><button className="icon-button" aria-label="关闭提示" onClick={() => setError("")}><X size={16} /></button></div>}

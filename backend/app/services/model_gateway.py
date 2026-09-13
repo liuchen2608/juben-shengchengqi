@@ -126,7 +126,7 @@ class Gateway:
                             ),
                             "messages": messages,
                             "max_tokens": cfg.story_output_tokens
-                            if context.get("_task") == "compose"
+                            if context.get("_task", "").startswith(("compose", "novel_"))
                             else cfg.max_output_tokens,
                             "response_format": {"type": "json_object"},
                         },
@@ -144,6 +144,17 @@ class Gateway:
                 response.raise_for_status()
                 body = response.json()
                 usage.append(body.get("usage"))
+                if body["choices"][0].get("finish_reason") == "length":
+                    error = AppError(
+                        "MODEL_OUTPUT_TRUNCATED", "模型输出仍被截断，已保留写作进度。可继续写作重试。", 422
+                    )
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": "上次 JSON 因长度截断。请把本次内容缩短，完整返回 JSON；若正在写正文，chapter_finished=false，剩余场景留到下次续写，不要强行收尾。",
+                        }
+                    )
+                    continue
                 return parse_output(body["choices"][0]["message"]["content"], schema), {"calls": usage}
             except AppError:
                 raise

@@ -131,3 +131,28 @@ async def test_deepseek_contract_and_connection_check(monkeypatch):
 def test_deepseek_rejects_wrong_host():
     with pytest.raises(ValueError):
         Settings(_env_file=None, model_provider="deepseek", model_base_url="https://other.example")
+
+
+@pytest.mark.asyncio
+async def test_truncated_output_is_retried_not_saved_as_complete(monkeypatch):
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "finish_reason": "length" if len(requests) == 1 else "stop",
+                        "message": {"content": json.dumps(OUTPUT)},
+                    }
+                ]
+            },
+        )
+
+    gateway = configure(monkeypatch, handler)
+    output, _ = await gateway.generate({"text": "开始"}, lambda: None)
+    assert output.reply == OUTPUT["reply"]
+    assert len(requests) == 2
+    assert "截断" in requests[-1]["messages"][-1]["content"]

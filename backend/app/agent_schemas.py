@@ -42,7 +42,7 @@ class ComposeInput(Strict):
 
 class Chapter(Strict):
     title: str = Field(min_length=1, max_length=100)
-    content: str = Field(min_length=1, max_length=15000)
+    content: str = Field(min_length=1)
     node_ids: list[str] = Field(min_length=1, max_length=100)
 
 
@@ -56,6 +56,39 @@ class Connection(Strict):
 class Composition(Strict):
     title: str = Field(min_length=1, max_length=100)
     synopsis: str = Field(min_length=1, max_length=2000)
-    chapters: list[Chapter] = Field(min_length=1, max_length=12)
-    connections: list[Connection] = Field(default_factory=list, max_length=150)
-    assumptions: list[str] = Field(default_factory=list, max_length=30)
+    chapters: list[Chapter] = Field(min_length=1)
+    connections: list[Connection] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+
+
+class PlannedChapter(Strict):
+    title: str = Field(min_length=1)
+    purpose: str = Field(min_length=1)
+    events: list[str] = Field(min_length=1)
+    node_ids: list[str] = Field(min_length=1)
+    closes: list[str] = Field(default_factory=list)
+
+
+class NovelPlan(Strict):
+    title: str = Field(min_length=1)
+    synopsis: str = Field(min_length=1)
+    ending: str = Field(min_length=1)
+    threads: list[str] = Field(min_length=1)
+    chapters: list[PlannedChapter] = Field(min_length=2)
+    connections: list[Connection] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+
+
+class NovelPart(Strict):
+    content: str = Field(min_length=1)
+    summary: str = Field(min_length=1, max_length=4000)
+    chapter_finished: bool
+    closed_threads: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+
+
+class NovelReview(Strict):
+    complete: bool
+    issues: list[str] = Field(default_factory=list)
+    repair_chapters: list[int] = Field(default_factory=list)
+    conclusion: str = Field(min_length=1)

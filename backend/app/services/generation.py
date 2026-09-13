@@ -66,7 +66,12 @@ class Runner:
                     return
                 run.status = "running"
                 context = run.context
-            output, usage = await self.gateway.generate(context, lambda: self.reserve(rid))
+            if context.get("_task") == "compose" and self.settings.model_provider != "mock":
+                from app.services.novel import write_novel
+
+                output, usage = await write_novel(self, rid, context)
+            else:
+                output, usage = await self.gateway.generate(context, lambda: self.reserve(rid))
             with self.db.transaction() as s:
                 run = s.get(Run, rid)
                 if run.status != "running":

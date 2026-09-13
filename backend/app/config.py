@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     model_max_attempts: int = 2
     max_output_tokens: int = 2400
     story_output_tokens: int = 6000
+    novel_context_bytes: int = 180000
     context_token_budget: int = 12000
     model_call_budget: int = 0
     allowed_origins: str = "http://127.0.0.1:3001,http://localhost:3001"

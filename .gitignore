@@ -21,3 +21,4 @@ playwright-report/
 .DS_Store
 
 !.env.deepseek.example
+.model-config-*
